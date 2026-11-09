@@ -4,6 +4,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { connectDB } from "./config/db";
 import authRoutes from "./routes/auth.routes";
+import catalogRoutes from "./routes/catalog.routes";
 import { notFound, errorHandler } from "./middleware/error.middleware";
 
 dotenv.config();
@@ -37,6 +38,7 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api", catalogRoutes);
 
 // Sab routes ke baad
 app.use(notFound);
