@@ -83,3 +83,20 @@ export const updateFoodSchema = z
 export const foodSlugParamSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]{1,80}$/, "Dish not found."),
 });
+
+// ================= REPORTS =================
+const pageField = z.coerce.number("Page must be a number.").int("Invalid page.").min(1, "Invalid page.").max(100000, "Invalid page.").default(1);
+
+export const analyticsQuerySchema = z.object({
+  days: z.enum(["7", "30", "90"], "Choose 7, 30 or 90 days.").default("7").transform(Number),
+});
+
+export const customersQuerySchema = z.object({
+  q: z.string("Search must be text.").trim().max(60, "Search is too long.").optional(),
+  page: pageField,
+});
+
+export const paymentsQuerySchema = z.object({
+  range: z.enum(["today", "7", "30"], "Choose today, 7 or 30 days.").default("today"),
+  page: pageField,
+});

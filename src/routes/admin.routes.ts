@@ -9,10 +9,14 @@ import {
   updateHotel,
   updateSettings,
 } from "../controllers/location.controller";
+import { getAnalytics, getDashboardStats, getPayments, listCustomers } from "../controllers/stats.controller";
 import { authorize, protect } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import {
   adminOrdersQuerySchema,
+  analyticsQuerySchema,
+  customersQuerySchema,
+  paymentsQuerySchema,
   cancelOrderSchema,
   createFoodSchema,
   foodSlugParamSchema,
@@ -52,5 +56,11 @@ router.post("/orders/:orderNumber/cancel", validate(orderNumberSchema, "params")
 router.get("/foods", listAdminFoods);
 router.post("/foods", validate(createFoodSchema), createFood);
 router.patch("/foods/:slug", validate(foodSlugParamSchema, "params"), validate(updateFoodSchema), updateFood);
+
+// Reports: sab asli orders aur accounts se (Pakistan time ke din)
+router.get("/stats/dashboard", getDashboardStats);
+router.get("/stats/analytics", validate(analyticsQuerySchema, "query"), getAnalytics);
+router.get("/customers", validate(customersQuerySchema, "query"), listCustomers);
+router.get("/payments", validate(paymentsQuerySchema, "query"), getPayments);
 
 export default router;

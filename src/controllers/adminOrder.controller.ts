@@ -93,7 +93,7 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
 
   const order = await Order.findOneAndUpdate(
     { orderNumber, status: { $in: FLOW.slice(0, FLOW.indexOf(next)) } },
-    { $set: { status: next }, $push: { statusHistory: { status: next, at: new Date(), by: req.user!._id } } },
+    { $set: { status: next, ...(next === "Delivered" ? { deliveredAt: new Date() } : {}) }, $push: { statusHistory: { status: next, at: new Date(), by: req.user!._id } } },
     { returnDocument: "after" }
   );
 
@@ -110,7 +110,7 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
   const order = await Order.findOneAndUpdate(
     { orderNumber, status: { $in: ACTIVE } },
     {
-      $set: { status: "Cancelled", cancelReason: req.body.reason },
+      $set: { status: "Cancelled", cancelReason: req.body.reason, cancelledAt: new Date() },
       $push: { statusHistory: { status: "Cancelled", at: new Date(), by: req.user!._id } },
     },
     { returnDocument: "after" }
