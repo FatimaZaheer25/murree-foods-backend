@@ -39,3 +39,14 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
   req.user = user;
   next();
 };
+
+// protect ke baad lagao: sirf in roles wale aage ja sakte hain
+export const authorize =
+  (...roles: IUser["role"][]) =>
+  (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      res.status(403).json({ success: false, message: "You do not have permission to do this." });
+      return;
+    }
+    next();
+  };

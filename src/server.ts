@@ -5,6 +5,8 @@ import cookieParser from "cookie-parser";
 import { connectDB } from "./config/db";
 import authRoutes from "./routes/auth.routes";
 import catalogRoutes from "./routes/catalog.routes";
+import locationRoutes from "./routes/location.routes";
+import adminRoutes from "./routes/admin.routes";
 import { notFound, errorHandler } from "./middleware/error.middleware";
 
 dotenv.config();
@@ -39,6 +41,8 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api", catalogRoutes);
+app.use("/api", locationRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Sab routes ke baad
 app.use(notFound);

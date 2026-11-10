@@ -1,0 +1,47 @@
+import { Schema, model, Document } from "mongoose";
+
+export interface ISetting extends Document {
+  key: string;
+  freeDeliveryThreshold: number; // itne ya zyada ke order par delivery free
+  deliveryFee: number;
+  serviceFee: number;
+  riderPayPerDelivery: number;
+  areas: string[];
+}
+
+const DEFAULT_AREAS = [
+  "The Mall",
+  "Kashmir Point",
+  "Pindi Point",
+  "Bhurban",
+  "Jhika Gali",
+  "Lower Topa",
+  "Gharial",
+  "Company Bagh",
+  "Sunny Bank",
+  "Kuldana",
+];
+
+const settingSchema = new Schema<ISetting>(
+  {
+    key: { type: String, required: true, unique: true }, // poori app ki sirf ek setting
+    freeDeliveryThreshold: { type: Number, default: 1500, min: 0 },
+    deliveryFee: { type: Number, default: 150, min: 0 },
+    serviceFee: { type: Number, default: 50, min: 0 },
+    riderPayPerDelivery: { type: Number, default: 120, min: 0 },
+    areas: { type: [String], default: DEFAULT_AREAS },
+  },
+  { timestamps: true }
+);
+
+const Setting = model<ISetting>("Setting", settingSchema);
+
+// Hamesha ek hi setting. Na ho to default values se ban jati hai
+export const getSettings = () =>
+  Setting.findOneAndUpdate(
+    { key: "main" },
+    { $setOnInsert: { key: "main" } },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+  ).orFail();
+
+export default Setting;
