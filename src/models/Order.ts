@@ -28,7 +28,8 @@ export interface IOrder extends Document {
   location: string; // ek line mein, jaise "Pine View Guest House · Room 8"
   paymentMethod: "Cash on Delivery";
   status: OrderStatus;
-  statusHistory: { status: OrderStatus; at: Date }[];
+  cancelReason?: string; // admin ki likhi wajah, customer ko dikhti hai
+  statusHistory: { status: OrderStatus; at: Date; by?: Types.ObjectId }[]; // by: jis admin ne badla
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,9 +67,15 @@ const orderSchema = new Schema<IOrder>(
     location: { type: String, required: true },
     paymentMethod: { type: String, enum: ["Cash on Delivery"], default: "Cash on Delivery" },
     status: { type: String, enum: ORDER_STATUSES, default: "Confirmed", index: true },
-    statusHistory: [{ _id: false, status: { type: String, enum: ORDER_STATUSES }, at: Date }],
+    cancelReason: { type: String, trim: true },
+    statusHistory: [
+      { _id: false, status: { type: String, enum: ORDER_STATUSES }, at: Date, by: { type: Schema.Types.ObjectId, ref: "User" } },
+    ],
   },
   { timestamps: true }
 );
+
+// Admin ki list: naye orders pehle
+orderSchema.index({ createdAt: -1 });
 
 export default model<IOrder>("Order", orderSchema);

@@ -8,10 +8,11 @@ import { getSettings } from "../models/Setting";
 import User from "../models/User";
 
 // Frontend ko ye shakal jati hai (pehle wale localStorage orders jaisi)
-const toClientOrder = (order: IOrder) => ({
+export const toClientOrder = (order: IOrder) => ({
   id: order.orderNumber,
   date: order.createdAt.toISOString(),
   status: order.status,
+  cancelReason: order.status === "Cancelled" ? order.cancelReason : undefined,
   items: order.items.map(({ slug, name, price, quantity }) => ({ slug, name, price, quantity })),
   subtotal: order.subtotal,
   deliveryFee: order.deliveryFee,

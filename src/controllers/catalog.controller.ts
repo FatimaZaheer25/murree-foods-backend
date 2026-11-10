@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Category from "../models/Category";
 import Food from "../models/Food";
+import { escapeRegex } from "../utils/text";
 
 // Customer ko sirf ye fields jati hain
 const PUBLIC_FIELDS = "-_id -__v -createdAt -updatedAt -isAvailable";
@@ -13,9 +14,6 @@ const SORTS = {
   "price-desc": { price: -1, _id: 1 },
   default: { _id: 1 },
 } as const;
-
-// User ka text regex mein seedha na jaye
-const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // ================= CATEGORIES =================
 export const listCategories = async (req: Request, res: Response) => {
