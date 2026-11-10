@@ -10,8 +10,8 @@ const newPassword = z
 
 const otp = z.string("Code is required.").trim().regex(/^\d{6}$/, "Code must be 6 digits.");
 
-// 0300-1234567 ya 0300 1234567 → 03001234567
-const phone = z
+// 0300-1234567 ya 0300 1234567 → 03001234567 (orders bhi yahi istemal karte hain)
+export const phone = z
   .string("Phone number is required.")
   .transform((value) => value.replace(/[\s-]/g, ""))
   .pipe(z.string().regex(/^03\d{9}$/, "Enter a valid phone number, e.g. 0300-1234567."));

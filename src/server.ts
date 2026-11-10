@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth.routes";
 import catalogRoutes from "./routes/catalog.routes";
 import locationRoutes from "./routes/location.routes";
 import adminRoutes from "./routes/admin.routes";
+import orderRoutes from "./routes/order.routes";
 import { notFound, errorHandler } from "./middleware/error.middleware";
 
 dotenv.config();
@@ -43,6 +44,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api", catalogRoutes);
 app.use("/api", locationRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/orders", orderRoutes);
 
 // Sab routes ke baad
 app.use(notFound);

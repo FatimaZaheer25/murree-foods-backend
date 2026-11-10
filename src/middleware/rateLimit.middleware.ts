@@ -1,5 +1,6 @@
 import { Request } from "express";
 import rateLimit from "express-rate-limit";
+import { AuthRequest } from "./auth.middleware";
 
 const MINUTE = 60 * 1000;
 
@@ -30,4 +31,15 @@ export const loginLimiter = limiter(
 // Email bhejne wale routes (resend-otp, forgot-password): dono ek hi ginti share karte hain,
 // is liye code baar baar mangwa kar 5 koshishon ki had bhi nahi tooti
 export const otpCooldown = limiter(MINUTE, 1, "Please wait a minute before requesting another code.", true);
-export const otpHourlyLimit = limiter(60 * MINUTE, 5, "Too many codes requested. Please try again in an hour.", true);
+// Har user ke 1 ghante mein 10 kamyab orders (protect ke baad lagta hai, is liye user mojood hai)
+export const orderLimiter = rateLimit({
+  windowMs: 60 * MINUTE,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { success: false, message: "Too many orders in a short time. Please try again later." },
+  skipFailedRequests: true,
+  keyGenerator: (req: Request) => String((req as AuthRequest).user!._id),
+});
+
+export const otpHourlyLimit =limiter(60 * MINUTE, 5, "Too many codes requested. Please try again in an hour.", true);
