@@ -1,12 +1,27 @@
-import { Schema, model, Document } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 import bcrypt from "bcryptjs";
+
+export const VEHICLE_TYPES = ["Bike", "Motorcycle", "Scooter", "Car"] as const;
+export const RIDER_STATUSES = ["pending", "approved", "rejected", "suspended"] as const;
+export type RiderStatus = (typeof RIDER_STATUSES)[number];
+
+// Rider ki maloomat. CNIC jaan boojh kar yahan nahi: woh kabhi server tak aata hi nahi
+export interface IRiderInfo {
+  vehicleType: (typeof VEHICLE_TYPES)[number];
+  registration: string;
+  status: RiderStatus;
+  reason?: string; // reject ya suspend ki wajah, rider ko dikhti hai
+  statusChangedAt?: Date;
+  statusChangedBy?: Types.ObjectId;
+}
 
 export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
   phone?: string;
-  role: "customer" | "admin";
+  role: "customer" | "admin" | "rider";
+  rider?: IRiderInfo; // sirf role "rider" par
   isVerified: boolean;
   otpCode?: string;
   otpExpires?: Date;
@@ -22,7 +37,21 @@ const userSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, minlength: 8, select: false },
     phone: { type: String, trim: true },
-    role: { type: String, enum: ["customer", "admin"], default: "customer" },
+    role: { type: String, enum: ["customer", "admin", "rider"], default: "customer" },
+    rider: {
+      type: new Schema<IRiderInfo>(
+        {
+          vehicleType: { type: String, enum: VEHICLE_TYPES, required: true },
+          registration: { type: String, required: true, trim: true, uppercase: true },
+          status: { type: String, enum: RIDER_STATUSES, default: "pending" },
+          reason: { type: String, trim: true },
+          statusChangedAt: Date,
+          statusChangedBy: { type: Schema.Types.ObjectId, ref: "User" },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
     isVerified: { type: Boolean, default: false },
 
     // OTP fields (email verify + password reset dono ke liye)
@@ -36,6 +65,9 @@ const userSchema = new Schema<IUser>(
   },
   { timestamps: true }
 );
+
+// Rider login phone se bhi hota hai: ek phone ek hi rider ka (customers par ye shart nahi)
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { role: "rider" } });
 
 // Save se pehle password hash karo
 userSchema.pre("save", async function () {

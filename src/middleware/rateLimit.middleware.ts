@@ -28,6 +28,17 @@ export const loginLimiter = limiter(
   true
 );
 
+// Rider login: wahi had, lekin email ya phone (jo likha ho) ke hisaab se
+export const riderLoginLimiter = rateLimit({
+  windowMs: 15 * MINUTE,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { success: false, message: "Too many failed attempts. Please try again in 15 minutes." },
+  skipSuccessfulRequests: true,
+  keyGenerator: (req: Request) => `rider:${req.body.identifier as string}`,
+});
+
 // Email bhejne wale routes (resend-otp, forgot-password): dono ek hi ginti share karte hain,
 // is liye code baar baar mangwa kar 5 koshishon ki had bhi nahi tooti
 export const otpCooldown = limiter(MINUTE, 1, "Please wait a minute before requesting another code.", true);

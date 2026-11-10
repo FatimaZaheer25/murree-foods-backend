@@ -5,14 +5,42 @@ import { sendEmail } from "../utils/sendEmail";
 import { generateToken, setTokenCookie, clearTokenCookie } from "../utils/token";
 import { AuthRequest } from "../middleware/auth.middleware";
 
-// ================= REGISTER =================
-export const register = async (req: Request, res: Response) => {
+// Frontend ko user ki ye shakal jati hai (login, /me). Rider ho to us ka status bhi
+export const toAuthUser = (user: IUser) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  phone: user.phone,
+  role: user.role,
+  ...(user.role === "rider" && user.rider
+    ? {
+        rider: {
+          status: user.rider.status,
+          vehicleType: user.rider.vehicleType,
+          registration: user.rider.registration,
+          // Wajah sirf jab abhi bhi lagu ho
+          reason: ["rejected", "suspended"].includes(user.rider.status) ? user.rider.reason : undefined,
+        },
+      }
+    : {}),
+});
+
+const PHONE_TAKEN = "This phone number is already used by another rider.";
+
+// ================= REGISTER (customer + rider) =================
+// Rider bhi yahi raasta: wahi OTP, sirf role "rider" aur gaari ki maloomat. Status "pending" (admin approve karega)
+const signup = (role: "customer" | "rider") => async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, password, vehicleType, registration } = req.body;
 
     const existingUser = await User.findOne({ email }).select("+otpExpires");
     if (existingUser && existingUser.isVerified) {
       res.status(409).json({ success: false, message: "An account with this email already exists." });
+      return;
+    }
+
+    if (role === "rider" && (await User.exists({ role: "rider", phone, email: { $ne: email } }))) {
+      res.status(409).json({ success: false, message: PHONE_TAKEN });
       return;
     }
 
@@ -27,14 +55,17 @@ export const register = async (req: Request, res: Response) => {
 
     const otp = generateOTP();
 
+    // Adhoora (verify na hua) account dobara signup par naye form se badal jata hai, role samet
     let user = existingUser;
     if (user) {
       user.name = name;
       user.phone = phone;
       user.password = password;
+      user.role = role;
     } else {
-      user = new User({ name, email, phone, password });
+      user = new User({ name, email, phone, password, role });
     }
+    user.rider = role === "rider" ? { vehicleType, registration, status: "pending" } : undefined;
 
     user.otpCode = hashOTP(otp);
     user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
@@ -44,7 +75,7 @@ export const register = async (req: Request, res: Response) => {
 
     await sendEmail(
       user.email,
-      "Verify your Murree Foods account",
+      role === "rider" ? "Verify your Murree Foods rider account" : "Verify your Murree Foods account",
       `<h2>Your verification code is: ${otp}</h2><p>This code expires in 10 minutes.</p>`
     );
 
@@ -53,15 +84,20 @@ export const register = async (req: Request, res: Response) => {
       message: "Account created. We sent a verification code to your email.",
     });
   } catch (error) {
-    // Ek hi waqt do requests: database ka unique email wala error
-    if ((error as { code?: number }).code === 11000) {
-      res.status(409).json({ success: false, message: "An account with this email already exists." });
+    // Ek hi waqt do requests: database ka unique wala error (email, ya rider ka phone)
+    const duplicate = error as { code?: number; keyPattern?: Record<string, number> };
+    if (duplicate.code === 11000) {
+      const message = duplicate.keyPattern?.phone ? PHONE_TAKEN : "An account with this email already exists.";
+      res.status(409).json({ success: false, message });
       return;
     }
     console.log(error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+export const register = signup("customer");
+export const registerRider = signup("rider");
 
 // ================= VERIFY EMAIL =================
 export const verifyEmail = async (req: Request, res: Response) => {
@@ -166,17 +202,41 @@ export const login = async (req: Request, res: Response) => {
     const token = generateToken(String(user._id));
     setTokenCookie(res, token);
 
-    res.status(200).json({
-      success: true,
-      message: "Logged in.",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-      },
-    });
+    res.status(200).json({ success: true, message: "Logged in.", user: toAuthUser(user) });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// ================= RIDER LOGIN =================
+// Email ya phone se. Sirf rider accounts (customer/admin yahan se nahi). Pending/rejected/suspended rider bhi
+// login ho sakta hai: frontend us ko panel ki jagah us ka status dikhata hai
+export const riderLogin = async (req: Request, res: Response) => {
+  try {
+    const { identifier, password, remember } = req.body;
+    const byEmail = identifier.includes("@");
+
+    const user = await User.findOne(byEmail ? { email: identifier } : { role: "rider", phone: identifier }).select("+password");
+
+    if (!user || !(await user.comparePassword(password))) {
+      res.status(401).json({ success: false, message: "Incorrect email, phone or password." });
+      return;
+    }
+    // Password sahi hai, is liye batana theek hai ke ye account kis kism ka hai
+    if (user.role !== "rider") {
+      res.status(403).json({ success: false, message: "This is not a rider account." });
+      return;
+    }
+    if (!user.isVerified) {
+      res.status(403).json({ success: false, message: "Please verify your email first.", needsVerification: true });
+      return;
+    }
+
+    // Remember me band: browser band hote hi cookie khatam
+    setTokenCookie(res, generateToken(String(user._id)), remember);
+
+    res.status(200).json({ success: true, message: "Logged in.", user: toAuthUser(user) });
   } catch (error) {
     console.log(error);
     res.status(500).json({ success: false, message: "Server error" });
@@ -187,16 +247,7 @@ export const login = async (req: Request, res: Response) => {
 export const getMe = (req: AuthRequest, res: Response) => {
   const user = req.user as IUser; // protect ne pehle hi dhoond liya
 
-  res.status(200).json({
-    success: true,
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-    },
-  });
+  res.status(200).json({ success: true, user: toAuthUser(user) });
 };
 
 // ================= LOGOUT =================

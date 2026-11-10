@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { IMAGE_RULE, isAllowedImage } from "../config/imageHosts";
+import { phone, registration, vehicleType } from "./auth.validator";
 
 // ================= ORDERS =================
 export const adminOrdersQuerySchema = z.object({
@@ -100,3 +101,32 @@ export const paymentsQuerySchema = z.object({
   range: z.enum(["today", "7", "30"], "Choose today, 7 or 30 days.").default("today"),
   page: pageField,
 });
+
+// ================= RIDERS =================
+export const ridersQuerySchema = z.object({
+  status: z.enum(["pending", "approved", "suspended", "rejected"], "Invalid status filter.").default("pending"),
+  q: z.string("Search must be text.").trim().max(60, "Search is too long.").optional(),
+  page: pageField,
+});
+
+// approve: pending ya rejected se (galti se reject hua ho to baad mein bhi). reject: sirf pending.
+// suspend: sirf approved. reactivate: sirf suspended. Reject aur suspend ki wajah zaroori (rider ko dikhti hai)
+export const riderStatusSchema = z
+  .object({
+    action: z.enum(["approve", "reject", "suspend", "reactivate"], "Choose a valid action."),
+    reason: z.string("Reason must be text.").trim().max(200, "Reason is too long (200 characters max).").optional(),
+  })
+  .superRefine((body, ctx) => {
+    if ((body.action === "reject" || body.action === "suspend") && (body.reason ?? "").length < 5)
+      ctx.addIssue({ code: "custom", path: ["reason"], message: "Please write a reason (at least 5 characters)." });
+  });
+
+export const updateRiderSchema = z
+  .object({
+    name: z.string("Full name is required.").trim().min(1, "Full name is required.").max(80, "Name is too long."),
+    phone,
+    vehicleType,
+    registration,
+  })
+  .partial()
+  .refine((body) => Object.keys(body).length > 0, "Nothing to update.");

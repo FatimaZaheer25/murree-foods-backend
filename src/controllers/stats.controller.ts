@@ -56,7 +56,12 @@ async function activeOrders() {
 
 // ================= DASHBOARD =================
 export const getDashboardStats = async (req: Request, res: Response) => {
-  const [week, active] = await Promise.all([dailySeries(pkDayStart(6), pkDayStart(-1), 7), activeOrders()]);
+  const [week, active, approvedRiders] = await Promise.all([
+    dailySeries(pkDayStart(6), pkDayStart(-1), 7),
+    activeOrders(),
+    // Online/offline Module 7 mein: tab tak approved riders ki ginti
+    User.countDocuments({ role: "rider", isVerified: true, "rider.status": "approved" }),
+  ]);
   const today = week[6];
 
   res.status(200).json({
@@ -64,6 +69,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     today: { date: today.date, orders: today.orders, revenue: today.revenue, delivered: today.delivered },
     yesterday: { orders: week[5].orders },
     active,
+    riders: { approved: approvedRiders },
     week,
   });
 };

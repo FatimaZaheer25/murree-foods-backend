@@ -33,3 +33,31 @@ export const loginSchema = z.object({
 });
 
 export const resetPasswordSchema = z.object({ email, otp, newPassword });
+
+// ================= RIDER =================
+export const vehicleType = z.enum(["Bike", "Motorcycle", "Scooter", "Car"], "Choose a vehicle type.");
+
+// "lea-2041" -> "LEA-2041"
+export const registration = z
+  .string("Vehicle registration is required.")
+  .trim()
+  .toUpperCase()
+  .min(2, "Vehicle registration is required.")
+  .max(20, "Vehicle registration is too long.")
+  .regex(/^[A-Z0-9][A-Z0-9 -]*$/, "Use letters, numbers and dashes only, e.g. LEA-2041.");
+
+// CNIC yahan jaan boojh kar nahi: frontend bhejta hi nahi, aur bheja bhi jaye to zod use hata deta hai
+export const riderRegisterSchema = registerSchema.extend({ vehicleType, registration });
+
+// Email ya phone: dono mein se jo likha ho
+export const riderLoginSchema = z.object({
+  identifier: z
+    .string("Email or phone number is required.")
+    .trim()
+    .min(1, "Email or phone number is required.")
+    .max(254, "Email or phone number is too long.")
+    .transform((value) => (value.includes("@") ? value.toLowerCase() : value.replace(/[\s-]/g, "")))
+    .refine((value) => z.email().safeParse(value).success || /^03\d{9}$/.test(value), "Enter a valid email or phone number."),
+  password: z.string("Password is required.").min(1, "Password is required."),
+  remember: z.boolean("Remember me must be true or false.").default(true),
+});

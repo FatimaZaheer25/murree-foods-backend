@@ -1,6 +1,8 @@
 import { Router } from "express";
 import {
   register,
+  registerRider,
+  riderLogin,
   verifyEmail,
   resendOtp,
   login,
@@ -11,12 +13,14 @@ import {
 } from "../controllers/auth.controller";
 import { protect } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
-import { ipLimiter, loginLimiter, otpCooldown, otpHourlyLimit } from "../middleware/rateLimit.middleware";
+import { ipLimiter, loginLimiter, otpCooldown, otpHourlyLimit, riderLoginLimiter } from "../middleware/rateLimit.middleware";
 import {
   emailSchema,
   loginSchema,
   registerSchema,
   resetPasswordSchema,
+  riderLoginSchema,
+  riderRegisterSchema,
   verifyEmailSchema,
 } from "../validators/auth.validator";
 
@@ -30,5 +34,9 @@ router.post("/logout", logout);
 router.get("/me", protect, getMe);
 router.post("/forgot-password", ipLimiter, validate(emailSchema), otpCooldown, otpHourlyLimit, forgotPassword);
 router.post("/reset-password", ipLimiter, validate(resetPasswordSchema), resetPassword);
+
+// Rider: alag signup (gaari ki maloomat) aur login (email ya phone). OTP, logout, /me aur reset upar wale hi
+router.post("/rider/register", ipLimiter, validate(riderRegisterSchema), registerRider);
+router.post("/rider/login", ipLimiter, validate(riderLoginSchema), riderLoginLimiter, riderLogin);
 
 export default router;
