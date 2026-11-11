@@ -31,7 +31,14 @@ export interface IOrder extends Document {
   cancelReason?: string; // admin ki likhi wajah, customer ko dikhti hai
   deliveredAt?: Date; // cash isi waqt aata hai (revenue ka din)
   cancelledAt?: Date;
-  statusHistory: { status: OrderStatus; at: Date; by?: Types.ObjectId }[]; // by: jis admin ne badla
+  statusHistory: { status: OrderStatus; at: Date; by?: Types.ObjectId }[]; // by: jis admin ya rider ne badla
+  // Rider (Module 7). riderInfo us waqt ki tasveer: customer ko naam/gaari, rider ka phone sirf raste mein
+  rider?: Types.ObjectId;
+  riderInfo?: { name: string; phone: string; vehicleType: string };
+  assignedAt?: Date;
+  pickedUpAt?: Date; // rider ne "Start Delivery" dabaya
+  riderPay?: number; // deliver hote waqt Settings ki raqam (baad mein Settings badle to purani kamai na badle)
+  riderSawCancel?: boolean; // rider ko "order cancel ho gaya" ek dafa dikh chuka
   createdAt: Date;
   updatedAt: Date;
 }
@@ -75,6 +82,12 @@ const orderSchema = new Schema<IOrder>(
     statusHistory: [
       { _id: false, status: { type: String, enum: ORDER_STATUSES }, at: Date, by: { type: Schema.Types.ObjectId, ref: "User" } },
     ],
+    rider: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    riderInfo: { _id: false, name: String, phone: String, vehicleType: String },
+    assignedAt: Date,
+    pickedUpAt: Date,
+    riderPay: { type: Number, min: 0 },
+    riderSawCancel: Boolean,
   },
   { timestamps: true }
 );

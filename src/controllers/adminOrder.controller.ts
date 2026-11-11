@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import Order, { IOrder, OrderStatus } from "../models/Order";
+import { getSettings } from "../models/Setting";
+import User from "../models/User";
+import { activeDeliveryOf } from "../utils/riderPresence";
 import { escapeRegex } from "../utils/text";
 import { toClientOrder } from "./order.controller";
 
@@ -17,9 +20,13 @@ const TABS = {
   cancelled: { status: "Cancelled" },
 } as const;
 
-// Admin ko customer wali shakal + kab kya hua
+// Admin ko customer wali shakal + kab kya hua + poora rider
 const adminOrder = (order: IOrder) => ({
   ...toClientOrder(order),
+  rider: order.riderInfo?.name || undefined,
+  riderId: order.rider ? String(order.rider) : undefined,
+  riderPhone: order.riderInfo?.phone || undefined,
+  riderVehicle: order.riderInfo?.vehicleType || undefined,
   history: order.statusHistory.map(({ status, at }) => ({ status, at: at.toISOString() })),
 });
 
@@ -99,6 +106,12 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
 
   if (!order) return explainConflict(orderNumber, res, "status");
 
+  // Admin ne rider wala order Delivered kiya: rider ki kamai bhi (Settings ki raqam)
+  if (next === "Delivered" && order.rider && order.riderPay === undefined) {
+    order.riderPay = (await getSettings()).riderPayPerDelivery;
+    await Order.updateOne({ _id: order._id }, { $set: { riderPay: order.riderPay } });
+  }
+
   res.status(200).json({ success: true, message: `Order marked as ${next}.`, order: adminOrder(order) });
 };
 
@@ -119,4 +132,62 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
   if (!order) return explainConflict(orderNumber, res, "cancel");
 
   res.status(200).json({ success: true, message: "Order cancelled.", order: adminOrder(order) });
+};
+
+// ================= ASSIGN / CHANGE / REMOVE RIDER =================
+// riderId: kisi approved rider ko do (ya badlo). null: rider hatao (sirf jab tak delivery shuru na hui ho)
+export const assignRider = async (req: AuthRequest, res: Response) => {
+  const orderNumber = String(req.params.orderNumber);
+  const riderId: string | null = req.body.riderId;
+
+  if (riderId === null) {
+    const order = await Order.findOneAndUpdate(
+      { orderNumber, status: { $in: ["Confirmed", "Preparing"] }, rider: { $exists: true } },
+      { $unset: { rider: "", riderInfo: "", assignedAt: "" } },
+      { returnDocument: "after" }
+    );
+    if (!order) {
+      const current = await Order.findOne({ orderNumber }).select("status rider");
+      if (!current) {
+        res.status(404).json({ success: false, message: "Order not found." });
+        return;
+      }
+      const message =
+        current.status === "Out for Delivery"
+          ? "This order is already out for delivery. Choose another rider instead of removing."
+          : !current.rider
+            ? "This order has no rider."
+            : `This order is ${current.status}, so the rider cannot be changed.`;
+      res.status(409).json({ success: false, message });
+      return;
+    }
+    res.status(200).json({ success: true, message: "Rider removed. The order is back in Available Orders.", order: adminOrder(order) });
+    return;
+  }
+
+  const rider = await User.findOne({ _id: riderId, role: "rider", isVerified: true, "rider.status": "approved" });
+  if (!rider) {
+    res.status(404).json({ success: false, message: "Rider not found or not approved." });
+    return;
+  }
+  const busy = await activeDeliveryOf(rider._id);
+  if (busy && busy.orderNumber !== orderNumber) {
+    res.status(409).json({ success: false, message: `${rider.name} already has an active delivery (${busy.orderNumber}).` });
+    return;
+  }
+
+  const order = await Order.findOneAndUpdate(
+    { orderNumber, status: { $in: ACTIVE } },
+    {
+      $set: {
+        rider: rider._id,
+        riderInfo: { name: rider.name, phone: rider.phone ?? "", vehicleType: rider.rider!.vehicleType },
+        assignedAt: new Date(),
+      },
+    },
+    { returnDocument: "after" }
+  );
+  if (!order) return explainConflict(orderNumber, res, "status");
+
+  res.status(200).json({ success: true, message: `Assigned to ${rider.name}.`, order: adminOrder(order) });
 };

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createFood, listAdminFoods, updateFood } from "../controllers/adminFood.controller";
-import { cancelOrder, listAdminOrders, updateOrderStatus } from "../controllers/adminOrder.controller";
-import { listRiders, updateRider, updateRiderStatus } from "../controllers/adminRider.controller";
+import { assignRider, cancelOrder, listAdminOrders, updateOrderStatus } from "../controllers/adminOrder.controller";
+import { listRiderOptions, listRiders, updateRider, updateRiderStatus } from "../controllers/adminRider.controller";
 import {
   createHotel,
   deleteHotel,
@@ -15,6 +15,7 @@ import { authorize, protect } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import {
   adminOrdersQuerySchema,
+  assignRiderSchema,
   analyticsQuerySchema,
   customersQuerySchema,
   paymentsQuerySchema,
@@ -55,6 +56,7 @@ router.patch(
   updateOrderStatus
 );
 router.post("/orders/:orderNumber/cancel", validate(orderNumberSchema, "params"), validate(cancelOrderSchema), cancelOrder);
+router.patch("/orders/:orderNumber/rider", validate(orderNumberSchema, "params"), validate(assignRiderSchema), assignRider);
 
 // Dishes: add, edit, hide/show. Delete jaan boojh kar nahi hai
 router.get("/foods", listAdminFoods);
@@ -69,6 +71,7 @@ router.get("/payments", validate(paymentsQuerySchema, "query"), getPayments);
 
 // Riders: list, approve/reject/suspend/reactivate, edit. Delete nahi
 router.get("/riders", validate(ridersQuerySchema, "query"), listRiders);
+router.get("/riders/options", listRiderOptions);
 router.patch("/riders/:id/status", validate(idParamSchema, "params"), validate(riderStatusSchema), updateRiderStatus);
 router.patch("/riders/:id", validate(idParamSchema, "params"), validate(updateRiderSchema), updateRider);
 

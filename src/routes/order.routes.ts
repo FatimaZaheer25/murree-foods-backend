@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getOrder, listMyOrders, placeOrder } from "../controllers/order.controller";
+import { blockRiders, getOrder, listMyOrders, placeOrder } from "../controllers/order.controller";
 import { protect } from "../middleware/auth.middleware";
 import { orderLimiter } from "../middleware/rateLimit.middleware";
 import { validate } from "../middleware/validate.middleware";
@@ -9,7 +9,7 @@ import { createOrderSchema, orderNumberSchema } from "../validators/order.valida
 const router = Router();
 router.use(protect);
 
-router.post("/", validate(createOrderSchema), orderLimiter, placeOrder);
+router.post("/", blockRiders, validate(createOrderSchema), orderLimiter, placeOrder);
 router.get("/mine", listMyOrders);
 router.get("/:orderNumber", validate(orderNumberSchema, "params"), getOrder);
 

@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { NextFunction, Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { nextSequence } from "../models/Counter";
 import Food from "../models/Food";
@@ -24,7 +24,20 @@ export const toClientOrder = (order: IOrder) => ({
   area: order.delivery.area,
   instructions: order.delivery.instructions || undefined,
   paymentMethod: order.paymentMethod,
+  // Customer ko rider ka pehla naam aur gaari; phone sirf jab rider raste mein ho
+  rider: order.riderInfo?.name ? order.riderInfo.name.split(" ")[0] : undefined,
+  riderVehicle: order.riderInfo?.vehicleType || undefined,
+  riderPhone: order.status === "Out for Delivery" ? order.riderInfo?.phone || undefined : undefined,
 });
+
+// Rider account se khana order nahi hota (customer account chahiye)
+export const blockRiders = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.user!.role === "rider") {
+    res.status(403).json({ success: false, message: "Rider accounts can't place food orders. Please use a customer account." });
+    return;
+  }
+  next();
+};
 
 // ================= PLACE ORDER =================
 // Qeemat aur fees hamesha server par nikalti hain. Browser ka bheja hua total sirf mawazne ke liye hai

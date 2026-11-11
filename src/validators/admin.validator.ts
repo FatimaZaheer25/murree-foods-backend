@@ -130,3 +130,8 @@ export const updateRiderSchema = z
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, "Nothing to update.");
+
+// Order par rider: kisi rider ka id, ya null (rider hatao)
+export const assignRiderSchema = z.object({
+  riderId: z.union([z.string().regex(/^[a-f\d]{24}$/i, "Choose a rider."), z.null()], "Choose a rider."),
+});

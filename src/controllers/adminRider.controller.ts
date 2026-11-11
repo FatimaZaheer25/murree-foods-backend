@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
+import { Types } from "mongoose";
 import { AuthRequest } from "../middleware/auth.middleware";
+import Order from "../models/Order";
 import User, { IUser, RiderStatus } from "../models/User";
+import { pkDayStart } from "../utils/pkTime";
+import { ACTIVE_DELIVERY, activeDeliveryOf, isOnline } from "../utils/riderPresence";
 import { sendEmail } from "../utils/sendEmail";
 import { escapeHtml, escapeRegex } from "../utils/text";
 
@@ -21,7 +25,9 @@ type Action = keyof typeof ACTIONS;
 // Sirf verified riders (email OTP ho chuka). Adhoore signup admin ko nahi dikhte
 const BASE = { role: "rider", isVerified: true } as const;
 
-const adminRider = (user: IUser) => ({
+type Extra = { deliveriesToday: number; activeOrder: string | null };
+
+const adminRider = (user: IUser, extra: Extra = { deliveriesToday: 0, activeOrder: null }) => ({
   id: String(user._id),
   name: user.name,
   email: user.email,
@@ -32,9 +38,26 @@ const adminRider = (user: IUser) => ({
   reason: ["rejected", "suspended"].includes(user.rider!.status) ? user.rider!.reason : undefined,
   joined: (user as unknown as { createdAt: Date }).createdAt.toISOString(),
   statusChangedAt: user.rider!.statusChangedAt?.toISOString(),
-  deliveriesToday: 0, // Module 7 (deliveries) mein asli
+  online: isOnline(user),
+  activeOrder: extra.activeOrder, // chal rahi delivery ka order number
+  deliveriesToday: extra.deliveriesToday,
   rating: null, // Ratings abhi nahi: "—"
 });
+
+// Riders ki aaj ki deliveries aur chal rahi delivery (ek hi dafa sab ke liye)
+async function extrasFor(ids: Types.ObjectId[]) {
+  const [delivered, active] = await Promise.all([
+    Order.aggregate<{ _id: Types.ObjectId; count: number }>([
+      { $match: { rider: { $in: ids }, status: "Delivered", deliveredAt: { $gte: pkDayStart(0) } } },
+      { $group: { _id: "$rider", count: { $sum: 1 } } },
+    ]),
+    Order.find({ rider: { $in: ids }, status: { $in: ACTIVE_DELIVERY } }).select("rider orderNumber"),
+  ]);
+  return (id: Types.ObjectId): Extra => ({
+    deliveriesToday: delivered.find((row) => String(row._id) === String(id))?.count ?? 0,
+    activeOrder: active.find((order) => String(order.rider) === String(id))?.orderNumber ?? null,
+  });
+}
 
 // Approve/reject par rider ko email. Email na ja sake to bhi admin ka kaam ho chuka (sirf log)
 async function notifyRider(user: IUser, action: Action) {
@@ -83,10 +106,11 @@ export const listRiders = async (req: Request, res: Response) => {
   ]);
 
   const countOf = (s: RiderStatus) => groups.find((group) => group._id === s)?.count ?? 0;
+  const extra = await extrasFor(riders.map((rider) => rider._id as Types.ObjectId));
 
   res.status(200).json({
     success: true,
-    riders: riders.map(adminRider),
+    riders: riders.map((rider) => adminRider(rider, extra(rider._id as Types.ObjectId))),
     total,
     page,
     totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
@@ -100,6 +124,15 @@ export const updateRiderStatus = async (req: AuthRequest, res: Response) => {
   const action = req.body.action as Action;
   const { from, to, message } = ACTIONS[action];
 
+  // Delivery beech mein ho to suspend nahi: pehle order kisi aur rider ko do
+  if (action === "suspend") {
+    const busy = await activeDeliveryOf(new Types.ObjectId(String(req.params.id)));
+    if (busy) {
+      res.status(409).json({ success: false, message: `This rider has an active delivery (${busy.orderNumber}). Reassign it first.` });
+      return;
+    }
+  }
+
   const rider = await User.findOneAndUpdate(
     { _id: String(req.params.id), ...BASE, "rider.status": { $in: from } },
     {
@@ -109,6 +142,8 @@ export const updateRiderStatus = async (req: AuthRequest, res: Response) => {
         "rider.statusChangedBy": req.user!._id,
         // Wajah sirf reject/suspend par; approve/reactivate par purani wajah hat jati hai
         ...(req.body.reason && (action === "reject" || action === "suspend") ? { "rider.reason": req.body.reason } : {}),
+        // Suspend: foran Offline
+        ...(action === "suspend" ? { "rider.online": false } : {}),
       },
       ...(action === "approve" || action === "reactivate" ? { $unset: { "rider.reason": "" } } : {}),
     },
@@ -157,4 +192,23 @@ export const updateRider = async (req: Request, res: Response) => {
     if ((error as { code?: number }).code !== 11000) throw error;
     res.status(409).json({ success: false, message: PHONE_TAKEN });
   }
+};
+
+// ================= RIDER CHOICES (order Manage mein assign) =================
+// Approved riders: online pehle, phir naam. Chal rahi delivery bhi saath (aise rider ko naya order nahi milta)
+export const listRiderOptions = async (req: Request, res: Response) => {
+  const riders = await User.find({ ...BASE, "rider.status": "approved" }).sort({ name: 1 }).limit(500);
+  const extra = await extrasFor(riders.map((rider) => rider._id as Types.ObjectId));
+
+  const options = riders
+    .map((rider) => ({
+      id: String(rider._id),
+      name: rider.name,
+      vehicleType: rider.rider!.vehicleType,
+      online: isOnline(rider),
+      activeOrder: extra(rider._id as Types.ObjectId).activeOrder,
+    }))
+    .sort((a, b) => Number(b.online) - Number(a.online));
+
+  res.status(200).json({ success: true, riders: options });
 };

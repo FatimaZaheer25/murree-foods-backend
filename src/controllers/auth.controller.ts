@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import jwt from "jsonwebtoken";
 import User, { IUser } from "../models/User";
 import { generateOTP, hashOTP } from "../utils/otp";
 import { sendEmail } from "../utils/sendEmail";
@@ -65,7 +66,7 @@ const signup = (role: "customer" | "rider") => async (req: Request, res: Respons
     } else {
       user = new User({ name, email, phone, password, role });
     }
-    user.rider = role === "rider" ? { vehicleType, registration, status: "pending" } : undefined;
+    user.rider = role === "rider" ? { vehicleType, registration, status: "pending", online: false } : undefined;
 
     user.otpCode = hashOTP(otp);
     user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
@@ -251,7 +252,17 @@ export const getMe = (req: AuthRequest, res: Response) => {
 };
 
 // ================= LOGOUT =================
-export const logout = (req: Request, res: Response) => {
+export const logout = async (req: Request, res: Response) => {
+  // Rider logout kare to Offline (order list mein na gine)
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const { id } = jwt.verify(token, process.env.JWT_SECRET as string) as { id: string };
+      await User.updateOne({ _id: id, role: "rider" }, { $set: { "rider.online": false } });
+    } catch {
+      // Purana ya ghalat token: sirf cookie mitani hai
+    }
+  }
   clearTokenCookie(res);
   res.status(200).json({ success: true, message: "Logged out." });
 };

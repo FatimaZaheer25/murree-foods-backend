@@ -13,6 +13,8 @@ export interface IRiderInfo {
   reason?: string; // reject ya suspend ki wajah, rider ko dikhti hai
   statusChangedAt?: Date;
   statusChangedBy?: Types.ObjectId;
+  online: boolean; // rider ne khud Online kiya (10 minute heartbeat na aaye to khud Offline)
+  lastSeenAt?: Date; // panel khula ho to har minute heartbeat
 }
 
 export interface IUser extends Document {
@@ -47,6 +49,8 @@ const userSchema = new Schema<IUser>(
           reason: { type: String, trim: true },
           statusChangedAt: Date,
           statusChangedBy: { type: Schema.Types.ObjectId, ref: "User" },
+          online: { type: Boolean, default: false },
+          lastSeenAt: Date,
         },
         { _id: false }
       ),

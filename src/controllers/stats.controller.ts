@@ -3,6 +3,7 @@ import Order from "../models/Order";
 import User from "../models/User";
 import { escapeRegex } from "../utils/text";
 import { PK_TIMEZONE, pkDateKeys, pkDayStart } from "../utils/pkTime";
+import { onlineFilter } from "../utils/riderPresence";
 
 // Ginti ke qaayde (sab jagah ek jaise):
 // - Orders: jo us din place hue, Cancelled ke ilawa
@@ -56,11 +57,13 @@ async function activeOrders() {
 
 // ================= DASHBOARD =================
 export const getDashboardStats = async (req: Request, res: Response) => {
-  const [week, active, approvedRiders] = await Promise.all([
+  const [week, active, approvedRiders, onlineRiders] = await Promise.all([
     dailySeries(pkDayStart(6), pkDayStart(-1), 7),
     activeOrders(),
     // Online/offline Module 7 mein: tab tak approved riders ki ginti
     User.countDocuments({ role: "rider", isVerified: true, "rider.status": "approved" }),
+    // Online: khud Online kiya + 10 minute ke andar heartbeat
+    User.countDocuments(onlineFilter()),
   ]);
   const today = week[6];
 
@@ -69,7 +72,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     today: { date: today.date, orders: today.orders, revenue: today.revenue, delivered: today.delivered },
     yesterday: { orders: week[5].orders },
     active,
-    riders: { approved: approvedRiders },
+    riders: { approved: approvedRiders, online: onlineRiders },
     week,
   });
 };
@@ -219,7 +222,21 @@ export const getPayments = async (req: Request, res: Response) => {
             { $sort: { closedAt: -1, _id: -1 } },
             { $skip: (page - 1) * PAGE_SIZE },
             { $limit: PAGE_SIZE },
-            { $project: { _id: 0, orderNumber: 1, closedAt: 1, customerName: 1, total: 1, paymentMethod: 1 } },
+            { $project: { _id: 0, orderNumber: 1, closedAt: 1, customerName: 1, total: 1, paymentMethod: 1, riderName: "$riderInfo.name" } },
+          ],
+          // Har rider ka hisaab: kitni deliveries, kitni kamai (deliver ke waqt ki raqam), kitna cash us ke paas aaya
+          riders: [
+            { $match: { rider: { $exists: true } } },
+            {
+              $group: {
+                _id: "$rider",
+                name: { $last: "$riderInfo.name" },
+                deliveries: { $sum: 1 },
+                earnings: { $sum: { $ifNull: ["$riderPay", 0] } },
+                cash: { $sum: "$total" },
+              },
+            },
+            { $sort: { deliveries: -1, name: 1 } },
           ],
         },
       },
@@ -243,8 +260,16 @@ export const getPayments = async (req: Request, res: Response) => {
       pending: { amount: pending.amount, count: pending.orders },
       cancelled: { amount: cancelledRow?.amount ?? 0, count: cancelledRow?.count ?? 0 },
     },
-    payments: collected.rows.map((row: { orderNumber: string; closedAt: Date; customerName: string; total: number; paymentMethod: string }) => ({
+    riders: collected.riders.map((row: { _id: unknown; name: string; deliveries: number; earnings: number; cash: number }) => ({
+      id: String(row._id),
+      name: row.name,
+      deliveries: row.deliveries,
+      earnings: row.earnings,
+      cash: row.cash,
+    })),
+    payments: collected.rows.map((row: { orderNumber: string; closedAt: Date; customerName: string; total: number; paymentMethod: string; riderName?: string }) => ({
       id: row.orderNumber,
+      rider: row.riderName ?? null,
       date: new Date(row.closedAt).toISOString(),
       customer: row.customerName,
       amount: row.total,

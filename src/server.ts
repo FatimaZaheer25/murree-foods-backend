@@ -8,6 +8,8 @@ import catalogRoutes from "./routes/catalog.routes";
 import locationRoutes from "./routes/location.routes";
 import adminRoutes from "./routes/admin.routes";
 import orderRoutes from "./routes/order.routes";
+import riderRoutes from "./routes/rider.routes";
+import { startOfflineSweep } from "./utils/riderPresence";
 import { notFound, errorHandler } from "./middleware/error.middleware";
 
 dotenv.config();
@@ -45,6 +47,7 @@ app.use("/api", catalogRoutes);
 app.use("/api", locationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/rider", riderRoutes);
 
 // Sab routes ke baad
 app.use(notFound);
@@ -52,6 +55,7 @@ app.use(errorHandler);
 
 // Pehle DB connect, phir server start
 connectDB().then(() => {
+  startOfflineSweep(); // 10 minute se heartbeat nahi: rider Offline
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
