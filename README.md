@@ -33,7 +33,7 @@ There is no admin sign-up on purpose.
    ```bash
    npm run make-admin your-email@example.com
    ```
-3. Log in again on the website. The Admin link opens the panel.
+3. Log in on the Admin panel (http://localhost:3001). An admin account can no longer log in on the website.
 
 ## Scripts
 
@@ -52,7 +52,7 @@ There is no admin sign-up on purpose.
 | `MONGODB_URI` | Yes | `mongodb+srv://…/murreefoods` | MongoDB Atlas connection string |
 | `JWT_SECRET` | Yes | a long random string | Signs the login cookie. Changing it logs everyone out |
 | `JWT_EXPIRES_IN` | No | `7d` | How long a login lasts |
-| `CLIENT_URL` | Yes | `http://localhost:3000,https://murreefoods.vercel.app` | Allowed website addresses, comma separated, no trailing `/` |
+| `CLIENT_URL` | Yes | `http://localhost:3000,http://localhost:3001,http://localhost:3002` | Addresses of the website, admin panel and rider panel, comma separated, no trailing `/` |
 | `EMAIL_USER` | Yes | `yourname@gmail.com` | Gmail account that sends codes and notices |
 | `EMAIL_PASS` | Yes | 16-letter app password | A Gmail **App Password**, not your normal password |
 | `CONTACT_INBOX` | No | `support@yourdomain.com` | Where contact messages are emailed. Empty = `EMAIL_USER` |
@@ -71,7 +71,7 @@ Nothing is deployed yet. When you do:
    - Build command: `npm install && npm run build`
    - Start command: `npm start`
    - Set all the variables above, with `NODE_ENV=production`.
-   - Set `CLIENT_URL` to your real website address, for example `https://murreefoods.vercel.app`.
+   - Set `CLIENT_URL` to the real addresses of all three apps (website, admin panel, rider panel).
 3. **First time on the real database:** run `npm run seed`, sign up on the website, then run
    `npm run make-admin your-email@example.com`.
    Run both from your computer with the Atlas `MONGODB_URI` in `.env`.
@@ -85,7 +85,9 @@ Nothing is deployed yet. When you do:
 
 ## Security in place
 
-- Passwords hashed with bcrypt. Login uses an `httpOnly` cookie. A password reset ends all old sessions.
+- Passwords hashed with bcrypt. Login uses an `httpOnly` cookie, a separate one for each app (`mf_customer`,
+  `mf_admin`, `mf_rider`). Each app sends an `X-App` header so the API reads the right cookie, and an account
+  can only log in to its own app. A password reset ends all old sessions.
 - Every request body, query and URL value is checked with zod.
 - Admin and rider routes check the account role.
 - Rate limits on sign-up, login, email codes, orders and the contact form (5 per hour per IP).

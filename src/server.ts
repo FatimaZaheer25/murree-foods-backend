@@ -25,7 +25,7 @@ if (missing.length) throw new Error(`Missing in .env: ${missing.join(", ")}`);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CLIENT_URL mein comma se kai frontend: http://localhost:3000,https://murreefoods.vercel.app
+// CLIENT_URL mein comma se teeno frontend (website, admin, rider): http://localhost:3000,http://localhost:3001,http://localhost:3002
 const allowedOrigins = (process.env.CLIENT_URL as string)
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
@@ -35,7 +35,11 @@ const allowedOrigins = (process.env.CLIENT_URL as string)
 app.set("trust proxy", Number(process.env.TRUST_PROXY ?? 0));
 
 // Middlewares. cors sab se pehle, taake error wale jawab par bhi CORS header ho
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// X-App: request kis app se aayi (us app ki login cookie parhi jati hai, utils/app.ts).
+// Is header ki wajah se browser har request se pehle ijazat poochta hai (preflight): maxAge = 10 minute yaad rakhe
+app.use(
+  cors({ origin: allowedOrigins, credentials: true, allowedHeaders: ["Content-Type", "X-App"], maxAge: 600 })
+);
 // Security headers (API sirf JSON deta hai, is liye default theek hain)
 app.use(helmet());
 // Sab se bari asli body (dish ya settings) bhi chand KB ki hai: 100 KB se bari request foran wapas (413)

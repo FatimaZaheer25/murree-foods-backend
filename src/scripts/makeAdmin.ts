@@ -21,7 +21,7 @@ async function makeAdmin() {
     console.log(`${email} is already an admin. Nothing changed.`);
   } else {
     await User.updateOne({ _id: user._id }, { role: "admin" });
-    console.log(`${email} is now an admin. Reload the website.`);
+    console.log(`${email} is now an admin. Log in on the Admin panel.`);
   }
 
   await mongoose.disconnect();

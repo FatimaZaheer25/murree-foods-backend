@@ -4,7 +4,12 @@ import User, { IUser } from "../models/User";
 import { generateOTP, hashOTP } from "../utils/otp";
 import { sendEmail } from "../utils/sendEmail";
 import { generateToken, setTokenCookie, clearTokenCookie } from "../utils/token";
-import { AuthRequest } from "../middleware/auth.middleware";
+import { AuthRequest, tokenOf } from "../middleware/auth.middleware";
+import { AppName, appOf, WRONG_APP_MESSAGE } from "../utils/app";
+
+// Password sahi hai, is liye batana theek hai ke account kis app ka hai (correctApp se frontend link banata hai)
+const wrongApp = (res: Response, role: AppName) =>
+  res.status(403).json({ success: false, message: WRONG_APP_MESSAGE[role], correctApp: role });
 
 // Frontend ko user ki ye shakal jati hai (login, /me). Rider ho to us ka status bhi
 export const toAuthUser = (user: IUser) => ({
@@ -185,9 +190,11 @@ export const resendOtp = async (req: Request, res: Response) => {
 };
 
 // ================= LOGIN =================
+// Website (customer) aur Admin panel (admin) dono yahi. Sirf usi app ka account andar aata hai
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
+    const app = appOf(req);
 
     const user = await User.findOne({ email }).select("+password");
 
@@ -195,13 +202,17 @@ export const login = async (req: Request, res: Response) => {
       res.status(401).json({ success: false, message: "Incorrect email or password." });
       return;
     }
+    if (user.role !== app) {
+      wrongApp(res, user.role);
+      return;
+    }
     if (!user.isVerified) {
-      res.status(403).json({ success: false, message: "Please verify your email first." });
+      res.status(403).json({ success: false, message: "Please verify your email first.", needsVerification: true });
       return;
     }
 
     const token = generateToken(String(user._id));
-    setTokenCookie(res, token);
+    setTokenCookie(res, app, token);
 
     res.status(200).json({ success: true, message: "Logged in.", user: toAuthUser(user) });
   } catch (error) {
@@ -224,9 +235,8 @@ export const riderLogin = async (req: Request, res: Response) => {
       res.status(401).json({ success: false, message: "Incorrect email, phone or password." });
       return;
     }
-    // Password sahi hai, is liye batana theek hai ke ye account kis kism ka hai
     if (user.role !== "rider") {
-      res.status(403).json({ success: false, message: "This is not a rider account." });
+      wrongApp(res, user.role);
       return;
     }
     if (!user.isVerified) {
@@ -235,7 +245,7 @@ export const riderLogin = async (req: Request, res: Response) => {
     }
 
     // Remember me band: browser band hote hi cookie khatam
-    setTokenCookie(res, generateToken(String(user._id)), remember);
+    setTokenCookie(res, "rider", generateToken(String(user._id)), remember);
 
     res.status(200).json({ success: true, message: "Logged in.", user: toAuthUser(user) });
   } catch (error) {
@@ -252,10 +262,12 @@ export const getMe = (req: AuthRequest, res: Response) => {
 };
 
 // ================= LOGOUT =================
+// Sirf isi app ki cookie mitti hai: baaki apps mein login waisa hi rehta hai
 export const logout = async (req: Request, res: Response) => {
+  const app = appOf(req);
   // Rider logout kare to Offline (order list mein na gine)
-  const token = req.cookies?.token;
-  if (token) {
+  const token = tokenOf(req);
+  if (token && app === "rider") {
     try {
       const { id } = jwt.verify(token, process.env.JWT_SECRET as string) as { id: string };
       await User.updateOne({ _id: id, role: "rider" }, { $set: { "rider.online": false } });
@@ -263,7 +275,7 @@ export const logout = async (req: Request, res: Response) => {
       // Purana ya ghalat token: sirf cookie mitani hai
     }
   }
-  clearTokenCookie(res);
+  clearTokenCookie(res, app);
   res.status(200).json({ success: true, message: "Logged out." });
 };
 
@@ -338,7 +350,8 @@ export const resetPassword = async (req: Request, res: Response) => {
     user.otpAttempts = 0;
     await user.save();
 
-    clearTokenCookie(res);
+    // Doosri apps ke purane sessions passwordChangedAt se khud khatam ho jate hain
+    clearTokenCookie(res, appOf(req));
 
     res.status(200).json({ success: true, message: "Password changed. Please log in with your new password." });
   } catch (error) {

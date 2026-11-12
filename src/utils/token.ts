@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { CookieOptions, Response } from "express";
+import { AppName, cookieNameFor } from "./app";
 
 // Token banana (wristband)
 export const generateToken = (userId: string): string => {
@@ -19,18 +20,18 @@ const cookieOptions = (): CookieOptions => {
   };
 };
 
-// Token ko cookie (jeb) mein daalna. Cookie utni hi der jitni token ki umar (JWT_EXPIRES_IN).
+// Token ko us app ki cookie (jeb) mein daalna. Cookie utni hi der jitni token ki umar (JWT_EXPIRES_IN).
 // remember = false: "session" cookie, browser band hote hi khatam (token ki umar phir bhi wahi)
-export const setTokenCookie = (res: Response, token: string, remember = true) => {
+export const setTokenCookie = (res: Response, app: AppName, token: string, remember = true) => {
   if (!remember) {
-    res.cookie("token", token, cookieOptions());
+    res.cookie(cookieNameFor(app), token, cookieOptions());
     return;
   }
   const { exp } = jwt.decode(token) as { exp: number };
-  res.cookie("token", token, { ...cookieOptions(), maxAge: exp * 1000 - Date.now() });
+  res.cookie(cookieNameFor(app), token, { ...cookieOptions(), maxAge: exp * 1000 - Date.now() });
 };
 
-// Cookie mitana (logout)
-export const clearTokenCookie = (res: Response) => {
-  res.clearCookie("token", cookieOptions());
+// Sirf us app ki cookie mitana (logout). Baaki apps ka login waisa hi rehta hai
+export const clearTokenCookie = (res: Response, app: AppName) => {
+  res.clearCookie(cookieNameFor(app), cookieOptions());
 };
