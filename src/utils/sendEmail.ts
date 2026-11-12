@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 
-export const sendEmail = async (to: string, subject: string, html: string) => {
+// replyTo: admin "Reply" dabaye to jawab seedha customer ko jaye (Contact form)
+export const sendEmail = async (to: string, subject: string, html: string, replyTo?: string) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -14,5 +15,6 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
     to,
     subject,
     html,
+    ...(replyTo && { replyTo }),
   });
 };

@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import { connectDB } from "./config/db";
 import authRoutes from "./routes/auth.routes";
 import catalogRoutes from "./routes/catalog.routes";
@@ -9,6 +10,7 @@ import locationRoutes from "./routes/location.routes";
 import adminRoutes from "./routes/admin.routes";
 import orderRoutes from "./routes/order.routes";
 import riderRoutes from "./routes/rider.routes";
+import contactRoutes from "./routes/contact.routes";
 import { startOfflineSweep } from "./utils/riderPresence";
 import { notFound, errorHandler } from "./middleware/error.middleware";
 
@@ -34,7 +36,10 @@ app.set("trust proxy", Number(process.env.TRUST_PROXY ?? 0));
 
 // Middlewares. cors sab se pehle, taake error wale jawab par bhi CORS header ho
 app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(express.json());
+// Security headers (API sirf JSON deta hai, is liye default theek hain)
+app.use(helmet());
+// Sab se bari asli body (dish ya settings) bhi chand KB ki hai: 100 KB se bari request foran wapas (413)
+app.use(express.json({ limit: "100kb" }));
 app.use(cookieParser());
 
 // Routes
@@ -48,6 +53,7 @@ app.use("/api", locationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/rider", riderRoutes);
+app.use("/api/contact", contactRoutes);
 
 // Sab routes ke baad
 app.use(notFound);

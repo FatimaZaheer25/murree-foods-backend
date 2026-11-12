@@ -13,12 +13,24 @@ const adminHotel = (hotel: IHotel) => ({
   isActive: hotel.isActive,
 });
 
-const adminSettings = (settings: Awaited<ReturnType<typeof getSettings>>) => ({
+type Settings = Awaited<ReturnType<typeof getSettings>>;
+
+// Customer ko dikhne wale rabte (khali ho to frontend woh option chhupa deta hai)
+const contactOf = (settings: Settings) => ({
+  contactWhatsapp: settings.contactWhatsapp,
+  contactPhone: settings.contactPhone,
+  contactEmail: settings.contactEmail,
+  facebookUrl: settings.facebookUrl,
+  instagramUrl: settings.instagramUrl,
+});
+
+const adminSettings = (settings: Settings) => ({
   freeDeliveryThreshold: settings.freeDeliveryThreshold,
   deliveryFee: settings.deliveryFee,
   serviceFee: settings.serviceFee,
   riderPayPerDelivery: settings.riderPayPerDelivery,
   areas: settings.areas,
+  ...contactOf(settings),
 });
 
 // ================= PUBLIC =================
@@ -32,11 +44,16 @@ export const listLocations = async (req: Request, res: Response) => {
   res.status(200).json({ success: true, hotels, areas: settings.areas });
 };
 
-// Cart ko sirf fees chahiye. Rider ki kamai public nahi
+// Cart ko fees, Help page aur footer ko rabte. Rider ki kamai public nahi
 export const getPublicSettings = async (req: Request, res: Response) => {
-  const { freeDeliveryThreshold, deliveryFee, serviceFee } = await getSettings();
+  const settings = await getSettings();
+  const { freeDeliveryThreshold, deliveryFee, serviceFee } = settings;
 
-  res.status(200).json({ success: true, settings: { freeDeliveryThreshold, deliveryFee, serviceFee } });
+  res.status(200).json({
+    success: true,
+    settings: { freeDeliveryThreshold, deliveryFee, serviceFee },
+    contact: contactOf(settings),
+  });
 };
 
 // ================= ADMIN: HOTELS =================

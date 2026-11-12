@@ -7,8 +7,22 @@ export interface AuthRequest extends Request {
   user?: IUser;
 }
 
+// Cookie wala token sahi ho, user abhi bhi mojood ho, aur token password badalne ke baad ka ho
+// (password reset hote hi purane saare sessions khatam). Warna null
+const userFromToken = async (token: string) => {
+  let decoded: { id: string; iat: number };
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: string; iat: number };
+  } catch {
+    return null;
+  }
+
+  const user = await User.findById(decoded.id).select("+passwordChangedAt");
+  const changedAt = user?.passwordChangedAt ? Math.floor(user.passwordChangedAt.getTime() / 1000) : 0;
+  return user && decoded.iat >= changedAt ? user : null;
+};
+
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  // 1. Cookie se token nikalo
   const token = req.cookies?.token;
 
   if (!token) {
@@ -16,27 +30,21 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
     return;
   }
 
-  // 2. Muhar check karo
-  let decoded: { id: string; iat: number };
-  try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: string; iat: number };
-  } catch (error) {
+  const user = await userFromToken(token);
+  if (!user) {
     res.status(401).json({ success: false, message: "Your session has expired. Please log in again." });
     return;
   }
 
-  // 3. User abhi bhi mojood ho, aur token password badalne ke baad ka ho
-  // (password reset hote hi purane saare sessions khatam)
-  const user = await User.findById(decoded.id).select("+passwordChangedAt");
-  const changedAt = user?.passwordChangedAt ? Math.floor(user.passwordChangedAt.getTime() / 1000) : 0;
-
-  if (!user || decoded.iat < changedAt) {
-    res.status(401).json({ success: false, message: "Your session has expired. Please log in again." });
-    return;
-  }
-
-  // 4. User request mein rakh do, aage controller use karega
+  // User request mein rakh do, aage controller use karega
   req.user = user;
+  next();
+};
+
+// Login zaroori nahi (jaise Contact form): ho to req.user, na ho ya purana ho to bhi aage
+export const optionalUser = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  const token = req.cookies?.token;
+  if (token) req.user = (await userFromToken(token)) ?? undefined;
   next();
 };
 

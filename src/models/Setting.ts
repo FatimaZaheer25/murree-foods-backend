@@ -7,6 +7,12 @@ export interface ISetting extends Document {
   serviceFee: number;
   riderPayPerDelivery: number;
   areas: string[];
+  // Help & Contact page aur footer. Khali = woh option nahi dikhta
+  contactWhatsapp: string;
+  contactPhone: string;
+  contactEmail: string;
+  facebookUrl: string;
+  instagramUrl: string;
 }
 
 const DEFAULT_AREAS = [
@@ -30,6 +36,11 @@ const settingSchema = new Schema<ISetting>(
     serviceFee: { type: Number, default: 50, min: 0 },
     riderPayPerDelivery: { type: Number, default: 120, min: 0 },
     areas: { type: [String], default: DEFAULT_AREAS },
+    contactWhatsapp: { type: String, trim: true, default: "" },
+    contactPhone: { type: String, trim: true, default: "" },
+    contactEmail: { type: String, trim: true, lowercase: true, default: "" },
+    facebookUrl: { type: String, trim: true, default: "" },
+    instagramUrl: { type: String, trim: true, default: "" },
   },
   { timestamps: true }
 );

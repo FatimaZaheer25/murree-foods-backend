@@ -10,7 +10,7 @@ export const errorHandler = (err: Error & { status?: number }, req: Request, res
   const isClientError = err.status !== undefined && err.status < 500;
   if (!isClientError) console.log(err);
 
-  res
-    .status(isClientError ? (err.status as number) : 500)
-    .json({ success: false, message: isClientError ? "Invalid request." : "Server error" });
+  // 100 KB se bari body (express.json ki had)
+  const message = err.status === 413 ? "Request is too large." : isClientError ? "Invalid request." : "Server error";
+  res.status(isClientError ? (err.status as number) : 500).json({ success: false, message });
 };

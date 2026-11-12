@@ -54,3 +54,13 @@ export const orderLimiter = rateLimit({
 });
 
 export const otpHourlyLimit =limiter(60 * MINUTE, 5, "Too many codes requested. Please try again in an hour.", true);
+
+// Contact form: ek IP se ghante mein 5 paigham (ghalat bhare form ginti mein nahi)
+export const contactLimiter = rateLimit({
+  windowMs: 60 * MINUTE,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { success: false, message: "You've sent several messages already. Please try again in an hour." },
+  skipFailedRequests: true,
+});

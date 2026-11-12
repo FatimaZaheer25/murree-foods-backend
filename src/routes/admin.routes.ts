@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { createFood, listAdminFoods, updateFood } from "../controllers/adminFood.controller";
+import { listMessages, updateMessage } from "../controllers/contact.controller";
 import { assignRider, cancelOrder, listAdminOrders, updateOrderStatus } from "../controllers/adminOrder.controller";
 import { listRiderOptions, listRiders, updateRider, updateRiderStatus } from "../controllers/adminRider.controller";
 import {
@@ -34,6 +35,7 @@ import {
   updateHotelSchema,
   updateSettingsSchema,
 } from "../validators/location.validator";
+import { messagesQuerySchema, updateMessageSchema } from "../validators/contact.validator";
 import { orderNumberSchema } from "../validators/order.validator";
 
 // Is file ke har route ke liye admin hona zaroori hai
@@ -74,5 +76,9 @@ router.get("/riders", validate(ridersQuerySchema, "query"), listRiders);
 router.get("/riders/options", listRiderOptions);
 router.patch("/riders/:id/status", validate(idParamSchema, "params"), validate(riderStatusSchema), updateRiderStatus);
 router.patch("/riders/:id", validate(idParamSchema, "params"), validate(updateRiderSchema), updateRider);
+
+// Help & Contact form ke paigham: list, Resolved / wapas New. Delete nahi
+router.get("/messages", validate(messagesQuerySchema, "query"), listMessages);
+router.patch("/messages/:id", validate(idParamSchema, "params"), validate(updateMessageSchema), updateMessage);
 
 export default router;
