@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Category from "../models/Category";
 import Food, { IFood } from "../models/Food";
+import { removeUnusedPhotos } from "../config/cloudinary";
 import { escapeRegex, slugify } from "../utils/text";
 
 // Admin ko poori dish, chhupi hui samait
@@ -97,8 +98,14 @@ export const updateFood = async (req: Request, res: Response) => {
     return;
   }
 
+  const photosBefore = [food.image, ...food.gallery];
   food.set(req.body);
   await food.save();
+
+  // Jo photos is dish se hatin aur kahin aur nahi lagi: Cloudinary se bhi hatao (sirf hamari upload ki hui).
+  // Jawab ka intezar nahi: dish to save ho chuki
+  const photosAfter = [food.image, ...food.gallery];
+  void removeUnusedPhotos(photosBefore.filter((url) => !photosAfter.includes(url)));
 
   const message =
     Object.keys(req.body).length === 1 && "isAvailable" in req.body

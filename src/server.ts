@@ -12,6 +12,7 @@ import orderRoutes from "./routes/order.routes";
 import riderRoutes from "./routes/rider.routes";
 import contactRoutes from "./routes/contact.routes";
 import { startOfflineSweep } from "./utils/riderPresence";
+import { cloudinaryReady } from "./config/cloudinary";
 import { notFound, errorHandler } from "./middleware/error.middleware";
 
 dotenv.config();
@@ -68,5 +69,6 @@ connectDB().then(() => {
   startOfflineSweep(); // 10 minute se heartbeat nahi: rider Offline
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    if (!cloudinaryReady()) console.log("Photo upload is off: add the CLOUDINARY_* keys to .env to turn it on.");
   });
 });

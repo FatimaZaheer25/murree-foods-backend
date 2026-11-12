@@ -81,6 +81,11 @@ export const updateFoodSchema = z
   .partial()
   .refine((body) => Object.keys(body).length > 0, "Nothing to update.");
 
+// Upload ki hui photo jo dish mein save nahi hui (form se hatai): sirf link
+export const discardPhotoSchema = z.object({
+  url: z.string("Photo link is required.").trim().min(1, "Photo link is required.").max(500, "Photo link is too long."),
+});
+
 export const foodSlugParamSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]{1,80}$/, "Dish not found."),
 });

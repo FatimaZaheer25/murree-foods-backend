@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { createFood, listAdminFoods, updateFood } from "../controllers/adminFood.controller";
 import { listMessages, updateMessage } from "../controllers/contact.controller";
+import { discardPhoto, uploadPhoto } from "../controllers/upload.controller";
 import { assignRider, cancelOrder, listAdminOrders, updateOrderStatus } from "../controllers/adminOrder.controller";
 import { listRiderOptions, listRiders, updateRider, updateRiderStatus } from "../controllers/adminRider.controller";
 import {
@@ -14,6 +15,8 @@ import {
 import { getAnalytics, getDashboardStats, getPayments, listCustomers } from "../controllers/stats.controller";
 import { authorize, protect } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
+import { uploadLimiter } from "../middleware/rateLimit.middleware";
+import { dishPhotoUpload, requireCloudinary } from "../middleware/upload.middleware";
 import {
   adminOrdersQuerySchema,
   assignRiderSchema,
@@ -25,6 +28,7 @@ import {
   updateRiderSchema,
   cancelOrderSchema,
   createFoodSchema,
+  discardPhotoSchema,
   foodSlugParamSchema,
   updateFoodSchema,
   updateOrderStatusSchema,
@@ -64,6 +68,11 @@ router.patch("/orders/:orderNumber/rider", validate(orderNumberSchema, "params")
 router.get("/foods", listAdminFoods);
 router.post("/foods", validate(createFoodSchema), createFood);
 router.patch("/foods/:slug", validate(foodSlugParamSchema, "params"), validate(updateFoodSchema), updateFood);
+
+// Dish ki photo Cloudinary par (form-data, field "photo", JPG/PNG/WebP, 5 MB tak). Wapas: link.
+// DELETE: upload ki lekin save nahi ki photo hatao (sirf jab kisi dish mein na lagi ho)
+router.post("/uploads/dish-photo", requireCloudinary, uploadLimiter, dishPhotoUpload, uploadPhoto);
+router.delete("/uploads/dish-photo", validate(discardPhotoSchema), discardPhoto);
 
 // Reports: sab asli orders aur accounts se (Pakistan time ke din)
 router.get("/stats/dashboard", getDashboardStats);

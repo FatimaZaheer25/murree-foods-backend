@@ -64,3 +64,13 @@ export const contactLimiter = rateLimit({
   message: { success: false, message: "You've sent several messages already. Please try again in an hour." },
   skipFailedRequests: true,
 });
+
+// Admin ki photo uploads: ek admin ghante mein 100 (ghalti se loop ya bot Cloudinary ki had na kha jaye)
+export const uploadLimiter = rateLimit({
+  windowMs: 60 * MINUTE,
+  limit: 100,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { success: false, message: "Too many photo uploads. Please try again later." },
+  keyGenerator: (req: Request) => `upload:${String((req as AuthRequest).user!._id)}`,
+});
