@@ -29,6 +29,9 @@ export interface IOrder extends Document {
   paymentMethod: "Cash on Delivery";
   status: OrderStatus;
   cancelReason?: string; // admin ki likhi wajah, customer ko dikhti hai
+  cancelledBy?: "admin" | "customer";
+  // Deliver hone ke baad customer ki rating (ek dafa)
+  review?: { stars: number; comment?: string; at: Date };
   deliveredAt?: Date; // cash isi waqt aata hai (revenue ka din)
   cancelledAt?: Date;
   statusHistory: { status: OrderStatus; at: Date; by?: Types.ObjectId }[]; // by: jis admin ya rider ne badla
@@ -77,6 +80,11 @@ const orderSchema = new Schema<IOrder>(
     paymentMethod: { type: String, enum: ["Cash on Delivery"], default: "Cash on Delivery" },
     status: { type: String, enum: ORDER_STATUSES, default: "Confirmed", index: true },
     cancelReason: { type: String, trim: true },
+    cancelledBy: { type: String, enum: ["admin", "customer"] },
+    review: {
+      type: new Schema({ stars: { type: Number, min: 1, max: 5, required: true }, comment: { type: String, trim: true }, at: Date }, { _id: false }),
+      default: undefined,
+    },
     deliveredAt: { type: Date, index: true },
     cancelledAt: Date,
     statusHistory: [

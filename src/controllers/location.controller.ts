@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Hotel, { IHotel } from "../models/Hotel";
 import { getSettings } from "../models/Setting";
+import { storeStatus } from "../utils/storeHours";
 
 const duplicateHotel = (error: unknown) => (error as { code?: number }).code === 11000;
 const DUPLICATE_MESSAGE = "This hotel already exists in this area.";
@@ -29,8 +30,19 @@ const adminSettings = (settings: Settings) => ({
   deliveryFee: settings.deliveryFee,
   serviceFee: settings.serviceFee,
   riderPayPerDelivery: settings.riderPayPerDelivery,
+  minOrderAmount: settings.minOrderAmount,
+  acceptingOrders: settings.acceptingOrders,
+  openTime: settings.openTime,
+  closeTime: settings.closeTime,
   areas: settings.areas,
   ...contactOf(settings),
+});
+
+// Abhi orders le rahe hain ya nahi (switch + auqaat), customer ko dikhane ke liye
+const storeOf = (settings: Settings) => ({
+  ...storeStatus(settings),
+  openTime: settings.openTime,
+  closeTime: settings.closeTime,
 });
 
 // ================= PUBLIC =================
@@ -47,13 +59,21 @@ export const listLocations = async (req: Request, res: Response) => {
 // Cart ko fees, Help page aur footer ko rabte. Rider ki kamai public nahi
 export const getPublicSettings = async (req: Request, res: Response) => {
   const settings = await getSettings();
-  const { freeDeliveryThreshold, deliveryFee, serviceFee } = settings;
+  const { freeDeliveryThreshold, deliveryFee, serviceFee, minOrderAmount } = settings;
 
   res.status(200).json({
     success: true,
-    settings: { freeDeliveryThreshold, deliveryFee, serviceFee },
+    settings: { freeDeliveryThreshold, deliveryFee, serviceFee, minOrderAmount },
     contact: contactOf(settings),
+    store: storeOf(settings),
   });
+};
+
+// Sirf "abhi khula hai?" (Cart/Checkout har dafa taaza poochte hain, cache nahi)
+export const getStoreStatus = async (req: Request, res: Response) => {
+  const settings = await getSettings();
+  res.set("Cache-Control", "no-store");
+  res.status(200).json({ success: true, store: storeOf(settings), minOrderAmount: settings.minOrderAmount });
 };
 
 // ================= ADMIN: HOTELS =================

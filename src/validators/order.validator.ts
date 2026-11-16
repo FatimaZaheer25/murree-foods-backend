@@ -44,3 +44,13 @@ export const createOrderSchema = z
 export const orderNumberSchema = z.object({
   orderNumber: z.string().regex(/^MF-\d{5,}$/, "Order not found."),
 });
+
+// Deliver hone ke baad customer ki rating
+export const reviewSchema = z.object({
+  stars: z
+    .number("Please choose 1 to 5 stars.")
+    .int("Please choose 1 to 5 stars.")
+    .min(1, "Please choose 1 to 5 stars.")
+    .max(5, "Please choose 1 to 5 stars."),
+  comment: z.string("Comment must be text.").trim().max(500, "Comment is too long (500 max).").optional(),
+});

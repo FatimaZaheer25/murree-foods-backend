@@ -3,6 +3,7 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import Order, { IOrder, OrderStatus } from "../models/Order";
 import { getSettings } from "../models/Setting";
 import User from "../models/User";
+import { sendOrderEmail } from "../utils/orderEmails";
 import { activeDeliveryOf } from "../utils/riderPresence";
 import { escapeRegex } from "../utils/text";
 import { toClientOrder } from "./order.controller";
@@ -97,14 +98,24 @@ export const listAdminOrders = async (req: Request, res: Response) => {
 export const updateOrderStatus = async (req: AuthRequest, res: Response) => {
   const next: OrderStatus = req.body.status;
   const orderNumber = String(req.params.orderNumber);
+  // Raste mein ya pahunch gaya: koi rider hona zaroori (warna kis ne pahunchaya? rider ki kamai bhi isi se)
+  const needsRider = next === "Out for Delivery" || next === "Delivered";
 
   const order = await Order.findOneAndUpdate(
-    { orderNumber, status: { $in: FLOW.slice(0, FLOW.indexOf(next)) } },
+    { orderNumber, status: { $in: FLOW.slice(0, FLOW.indexOf(next)) }, ...(needsRider ? { rider: { $exists: true } } : {}) },
     { $set: { status: next, ...(next === "Delivered" ? { deliveredAt: new Date() } : {}) }, $push: { statusHistory: { status: next, at: new Date(), by: req.user!._id } } },
     { returnDocument: "after" }
   );
 
-  if (!order) return explainConflict(orderNumber, res, "status");
+  if (!order) {
+    const current = needsRider ? await Order.findOne({ orderNumber }).select("status rider") : null;
+    if (current && !current.rider && ["Confirmed", "Preparing"].includes(current.status)) {
+      res.status(409).json({ success: false, message: `Assign a rider before marking it ${next}.` });
+      return;
+    }
+    return explainConflict(orderNumber, res, "status");
+  }
+  if (next === "Delivered") void sendOrderEmail(order, "delivered");
 
   // Admin ne rider wala order Delivered kiya: rider ki kamai bhi (Settings ki raqam)
   if (next === "Delivered" && order.rider && order.riderPay === undefined) {
@@ -123,7 +134,7 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
   const order = await Order.findOneAndUpdate(
     { orderNumber, status: { $in: ACTIVE } },
     {
-      $set: { status: "Cancelled", cancelReason: req.body.reason, cancelledAt: new Date() },
+      $set: { status: "Cancelled", cancelReason: req.body.reason, cancelledBy: "admin", cancelledAt: new Date() },
       $push: { statusHistory: { status: "Cancelled", at: new Date(), by: req.user!._id } },
     },
     { returnDocument: "after" }
@@ -131,6 +142,7 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
 
   if (!order) return explainConflict(orderNumber, res, "cancel");
 
+  void sendOrderEmail(order, "cancelled");
   res.status(200).json({ success: true, message: "Order cancelled.", order: adminOrder(order) });
 };
 

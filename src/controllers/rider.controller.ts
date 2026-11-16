@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import Order, { IOrder, OrderStatus } from "../models/Order";
 import { getSettings } from "../models/Setting";
 import User from "../models/User";
+import { sendOrderEmail } from "../utils/orderEmails";
 import { pkDayStart } from "../utils/pkTime";
 import { ACTIVE_DELIVERY, activeDeliveryOf, isOnline, ONLINE_WINDOW_MS } from "../utils/riderPresence";
 
@@ -216,7 +217,8 @@ async function myOrderAction(
   res: Response,
   from: OrderStatus[],
   update: (order: IOrder) => Promise<Record<string, unknown>> | Record<string, unknown>,
-  message: string
+  message: string,
+  after?: (order: IOrder) => void // kaam ho jane ke baad (jaise customer ko email)
 ) {
   const me = req.user!;
   const orderNumber = String(req.params.orderNumber);
@@ -244,6 +246,7 @@ async function myOrderAction(
     res.status(409).json({ success: false, message: "This order just changed. Please refresh." });
     return;
   }
+  after?.(order);
   res.status(200).json({ success: true, message, delivery: order.rider ? activeDelivery(order) : null });
 }
 
@@ -275,7 +278,8 @@ export const markDelivered = (req: AuthRequest, res: Response) =>
         $push: { statusHistory: { status: "Delivered", at: new Date(), by: req.user!._id } },
       };
     },
-    "Marked as delivered."
+    "Marked as delivered.",
+    (order) => void sendOrderEmail(order, "delivered")
   );
 
 // ================= MY DELIVERIES / HISTORY =================

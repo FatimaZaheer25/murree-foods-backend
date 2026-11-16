@@ -6,6 +6,8 @@ import Hotel from "../models/Hotel";
 import Order, { IOrder } from "../models/Order";
 import { getSettings } from "../models/Setting";
 import User from "../models/User";
+import { sendOrderEmail } from "../utils/orderEmails";
+import { storeStatus } from "../utils/storeHours";
 
 // Frontend ko ye shakal jati hai (pehle wale localStorage orders jaisi)
 export const toClientOrder = (order: IOrder) => ({
@@ -13,6 +15,8 @@ export const toClientOrder = (order: IOrder) => ({
   date: order.createdAt.toISOString(),
   status: order.status,
   cancelReason: order.status === "Cancelled" ? order.cancelReason : undefined,
+  cancelledBy: order.status === "Cancelled" ? order.cancelledBy : undefined,
+  review: order.review ? { stars: order.review.stars, comment: order.review.comment || undefined, at: order.review.at.toISOString() } : undefined,
   items: order.items.map(({ slug, name, price, quantity }) => ({ slug, name, price, quantity })),
   subtotal: order.subtotal,
   deliveryFee: order.deliveryFee,
@@ -46,6 +50,12 @@ export const placeOrder = async (req: AuthRequest, res: Response) => {
     req.body;
 
   const settings = await getSettings();
+  // Admin ne orders band kiye hain, ya auqaat ke bahar
+  const store = storeStatus(settings);
+  if (!store.open) {
+    res.status(409).json({ success: false, message: store.message, closed: true });
+    return;
+  }
   if (!settings.areas.includes(area)) {
     res.status(400).json({ success: false, message: "Please select your area again." });
     return;
@@ -67,6 +77,13 @@ export const placeOrder = async (req: AuthRequest, res: Response) => {
     return { food: food._id, slug: food.slug, name: food.name, price: food.price, quantity: item.quantity };
   });
   const subtotal = lines.reduce((sum: number, line: { price: number; quantity: number }) => sum + line.price * line.quantity, 0);
+  if (subtotal < settings.minOrderAmount) {
+    res.status(400).json({
+      success: false,
+      message: `The minimum order is Rs. ${settings.minOrderAmount.toLocaleString("en-US")} (food only). Please add a little more.`,
+    });
+    return;
+  }
   const deliveryFee = subtotal >= settings.freeDeliveryThreshold ? 0 : settings.deliveryFee;
   const serviceFee = settings.serviceFee;
   const total = subtotal + deliveryFee + serviceFee;
@@ -106,7 +123,86 @@ export const placeOrder = async (req: AuthRequest, res: Response) => {
     );
   }
 
+  void sendOrderEmail(order, "placed");
   res.status(201).json({ success: true, message: "Order placed.", order: toClientOrder(order) });
+};
+
+// ================= CUSTOMER CANCEL =================
+// Sirf apna order, aur sirf jab tak kitchen ne shuru nahi kiya (Confirmed). Us ke baad support se baat
+export const cancelMyOrder = async (req: AuthRequest, res: Response) => {
+  const orderNumber = String(req.params.orderNumber);
+  const mine = { orderNumber, user: req.user!._id };
+
+  const order = await Order.findOneAndUpdate(
+    { ...mine, status: "Confirmed" },
+    {
+      $set: { status: "Cancelled", cancelReason: "Cancelled by the customer.", cancelledBy: "customer", cancelledAt: new Date() },
+      $push: { statusHistory: { status: "Cancelled", at: new Date(), by: req.user!._id } },
+    },
+    { returnDocument: "after" }
+  );
+
+  if (!order) {
+    const current = await Order.findOne(mine).select("status");
+    if (!current) {
+      res.status(404).json({ success: false, message: "Order not found." });
+    } else if (current.status === "Cancelled") {
+      res.status(409).json({ success: false, message: "This order is already cancelled." });
+    } else if (current.status === "Delivered") {
+      res.status(409).json({ success: false, message: "This order is already delivered." });
+    } else {
+      res.status(409).json({
+        success: false,
+        message: "The kitchen has already started on this order, so it can't be cancelled here. Please contact us.",
+      });
+    }
+    return;
+  }
+
+  void sendOrderEmail(order, "cancelled");
+  res.status(200).json({ success: true, message: "Order cancelled.", order: toClientOrder(order) });
+};
+
+// ================= RATING =================
+// Deliver hone ke baad ek dafa: 1-5 sitare + (marzi se) do lafz. Order ki har dish ki rating bhi isi se badalti hai
+export const reviewOrder = async (req: AuthRequest, res: Response) => {
+  const orderNumber = String(req.params.orderNumber);
+  const mine = { orderNumber, user: req.user!._id };
+  const { stars, comment } = req.body as { stars: number; comment?: string };
+
+  const order = await Order.findOneAndUpdate(
+    { ...mine, status: "Delivered", review: { $exists: false } },
+    { $set: { review: { stars, ...(comment ? { comment } : {}), at: new Date() } } },
+    { returnDocument: "after" }
+  );
+
+  if (!order) {
+    const current = await Order.findOne(mine).select("status review");
+    if (!current) res.status(404).json({ success: false, message: "Order not found." });
+    else if (current.review) res.status(409).json({ success: false, message: "You have already rated this order." });
+    else res.status(409).json({ success: false, message: "You can rate your order after it is delivered." });
+    return;
+  }
+
+  // Har dish ki nayi ausat: (purani ausat × ginti + naye sitare) / (ginti + 1), ek dashamlav tak.
+  // Database khud hisaab karta hai, taa ke do ratings ek saath aayein to bhi koi gum na ho
+  const foodIds = [...new Set(order.items.map((item) => String(item.food)))];
+  await Food.updateMany(
+    { _id: { $in: foodIds } },
+    [
+      {
+        $set: {
+          rating: {
+            $round: [{ $divide: [{ $add: [{ $multiply: ["$rating", "$reviewCount"] }, stars] }, { $add: ["$reviewCount", 1] }] }, 1],
+          },
+          reviewCount: { $add: ["$reviewCount", 1] },
+        },
+      },
+    ],
+    { updatePipeline: true }
+  );
+
+  res.status(200).json({ success: true, message: "Thank you for your rating!", order: toClientOrder(order) });
 };
 
 // ================= MY ORDERS =================

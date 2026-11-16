@@ -6,6 +6,11 @@ export interface ISetting extends Document {
   deliveryFee: number;
   serviceFee: number;
   riderPayPerDelivery: number;
+  minOrderAmount: number; // khane (subtotal) ki kam az kam raqam. 0 = koi had nahi
+  // Orders lena: band karne ka switch, aur roz ke auqaat (Pakistan time, "HH:MM"). Dono khali = 24 ghante
+  acceptingOrders: boolean;
+  openTime: string;
+  closeTime: string;
   areas: string[];
   // Help & Contact page aur footer. Khali = woh option nahi dikhta
   contactWhatsapp: string;
@@ -35,6 +40,10 @@ const settingSchema = new Schema<ISetting>(
     deliveryFee: { type: Number, default: 150, min: 0 },
     serviceFee: { type: Number, default: 50, min: 0 },
     riderPayPerDelivery: { type: Number, default: 120, min: 0 },
+    minOrderAmount: { type: Number, default: 0, min: 0 },
+    acceptingOrders: { type: Boolean, default: true },
+    openTime: { type: String, trim: true, default: "" },
+    closeTime: { type: String, trim: true, default: "" },
     areas: { type: [String], default: DEFAULT_AREAS },
     contactWhatsapp: { type: String, trim: true, default: "" },
     contactPhone: { type: String, trim: true, default: "" },

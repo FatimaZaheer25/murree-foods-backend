@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TIME_PATTERN } from "../utils/storeHours";
 
 const hotelFields = {
   name: z.string("Hotel name is required.").trim().min(1, "Hotel name is required.").max(100, "Hotel name is too long."),
@@ -54,6 +55,13 @@ const socialUrl = (label: string, host: string) =>
       }
     }, `${label} must be a https://${host}/... page link.`);
 
+// "09:30" jaisa waqt (24 ghante wali ghari), ya khali
+const storeTime = (label: string) =>
+  z
+    .string(`${label} must be text.`)
+    .trim()
+    .refine((value) => value === "" || TIME_PATTERN.test(value), `${label} must look like 09:30.`);
+
 export const updateSettingsSchema = z.object({
   freeDeliveryThreshold: money("Free delivery limit"),
   deliveryFee: money("Delivery fee"),
@@ -76,4 +84,12 @@ export const updateSettingsSchema = z.object({
     .optional(),
   facebookUrl: socialUrl("Facebook link", "facebook.com").optional(),
   instagramUrl: socialUrl("Instagram link", "instagram.com").optional(),
-});
+  // Orders: kam az kam raqam, band/khula switch, roz ke auqaat ("" = 24 ghante). Na bheje to purane hi
+  minOrderAmount: money("Minimum order").optional(),
+  acceptingOrders: z.boolean("Accepting orders must be true or false.").optional(),
+  openTime: storeTime("Opening time").optional(),
+  closeTime: storeTime("Closing time").optional(),
+}).refine(
+  (body) => body.openTime === undefined || body.closeTime === undefined || !body.openTime === !body.closeTime,
+  { message: "Set both opening and closing time, or leave both empty (open all day).", path: ["openTime"] }
+);

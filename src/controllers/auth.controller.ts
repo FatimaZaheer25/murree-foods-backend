@@ -146,6 +146,14 @@ export const verifyEmail = async (req: Request, res: Response) => {
     user.otpAttempts = 0;
     await user.save();
 
+    // Code sahi: isi app ka account hai to seedha login (dobara password nahi). Doosri app ka ho to sirf verify
+    const app = appOf(req);
+    if (user.role === app) {
+      setTokenCookie(res, app, generateToken(String(user._id)));
+      res.status(200).json({ success: true, message: "Email verified. Welcome to Murree Foods!", user: toAuthUser(user) });
+      return;
+    }
+
     res.status(200).json({ success: true, message: "Email verified. You can now log in." });
   } catch (error) {
     console.log(error);
